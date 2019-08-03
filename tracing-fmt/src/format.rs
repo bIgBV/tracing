@@ -14,7 +14,7 @@ use tracing_serde::SerdeMapVisitor;
 
 #[cfg(feature = "ansi")]
 use ansi_term::{Colour, Style};
-use serde::ser::SerializeMap;
+use serde::ser::Serializer as SerdeSerialer;
 use serde_json::ser::Serializer;
 
 /// A type that can format a tracing `Event` for a `fmt::Write`.
@@ -196,15 +196,39 @@ where
     }
 }
 
-pub struct NewJsonRecorder;
+/// A type alias for the return value of `Serializer::serialize_map` which will be stored in
+/// `NewJosonRecorder`
+type SerdeSerializeMap<'a> = <&'a mut Serializer<&'a mut [u8]> as SerdeSerialer>::SerializeMap;
 
-impl<'a> crate::NewVisitor<'a> for NewJsonRecorder {
-    type Visitor = SerdeMapVisitor<Serializer<&'a mut dyn io::Write>>;
+pub struct NewJsonRecorder<'a> {
+    buf: Vec<u8>,
+    writer: Option<&'a mut dyn Write>,
+    serializer: Option<SerdeSerializeMap<'a>>,
+}
+
+impl<'a> NewJsonRecorder<'a> {
+    fn set_writer(&mut self, fmt_writer: &'a mut dyn Write) {
+        self.writer = Some(fmt_writer);
+    }
+
+    fn set_serializer(&mut self, serializer: SerdeSerializeMap) {
+        self.serializer = Some(serializer);
+    }
+}
+
+impl<'a> crate::NewVisitor<'a> for NewJsonRecorder<'a> {
+    type Visitor =
+        SerdeMapVisitor<<&'a mut Serializer<&'a mut [u8]> as SerdeSerialer>::SerializeMap>;
 
     #[inline]
-    fn make(&self, writer: &'a mut dyn Write, is_empty: bool) -> Self::Visitor {
-        let serializer = Serializer::new(writer).serialize_map(None).unwrap();
-        SerdeMapVisitor::new(serializer)
+    fn make(&mut self, writer: &'a mut dyn Write, is_empty: bool) -> Self::Visitor {
+        self.set_writer(writer);
+
+        let serializer = Serializer::new(&mut self.buf).serialize_map(None).unwrap();
+
+        self.set_serializer(serializer);
+
+        SerdeMapVisitor::new(self.serializer.as_mut())
     }
 }
 
@@ -233,7 +257,7 @@ impl<'a> crate::NewVisitor<'a> for NewRecorder {
     type Visitor = Recorder<'a>;
 
     #[inline]
-    fn make(&self, writer: &'a mut dyn Write, is_empty: bool) -> Self::Visitor {
+    fn make(&mut self, writer: &'a mut dyn Write, is_empty: bool) -> Self::Visitor {
         Recorder::new(writer, is_empty)
     }
 }

@@ -185,7 +185,7 @@ impl<'a, N> Context<'a, N> {
     }
 
     pub fn new_visitor<'writer>(
-        &self,
+        &mut self,
         writer: &'writer mut dyn fmt::Write,
         is_empty: bool,
     ) -> N::Visitor

@@ -139,9 +139,9 @@ where
                     &mut b
                 }
             };
-            let ctx = span::Context::new(&self.spans, &self.new_visitor);
+            let mut ctx = span::Context::new(&self.spans, &self.new_visitor);
 
-            if self.fmt_event.format_event(&ctx, buf, event).is_ok() {
+            if self.fmt_event.format_event(&mut ctx, buf, event).is_ok() {
                 // TODO: make the io object configurable
                 let _ = io::Write::write_all(&mut io::stdout(), buf.as_bytes());
             }

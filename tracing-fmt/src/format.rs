@@ -28,7 +28,7 @@ pub trait FormatEvent<N> {
     /// Write a log message for `Event` in `Context` to the given `Write`.
     fn format_event(
         &self,
-        ctx: &span::Context<N>,
+        ctx: &mut span::Context<N>,
         writer: &mut dyn fmt::Write,
         event: &Event,
     ) -> fmt::Result;
@@ -37,7 +37,7 @@ pub trait FormatEvent<N> {
 impl<N> FormatEvent<N> for fn(&span::Context<N>, &mut dyn fmt::Write, &Event) -> fmt::Result {
     fn format_event(
         &self,
-        ctx: &span::Context<N>,
+        ctx: &mut span::Context<N>,
         writer: &mut dyn fmt::Write,
         event: &Event,
     ) -> fmt::Result {
@@ -137,7 +137,7 @@ where
 {
     fn format_event(
         &self,
-        ctx: &span::Context<N>,
+        ctx: &mut span::Context<N>,
         writer: &mut dyn fmt::Write,
         event: &Event,
     ) -> fmt::Result {
@@ -169,7 +169,7 @@ where
 {
     fn format_event(
         &self,
-        ctx: &span::Context<N>,
+        ctx: &mut span::Context<N>,
         writer: &mut dyn fmt::Write,
         event: &Event,
     ) -> fmt::Result {
@@ -196,39 +196,38 @@ where
     }
 }
 
-/// A type alias for the return value of `Serializer::serialize_map` which will be stored in
-/// `NewJosonRecorder`
-type SerdeSerializeMap<'a> = <&'a mut Serializer<&'a mut [u8]> as SerdeSerialer>::SerializeMap;
-
 pub struct NewJsonRecorder<'a> {
     buf: Vec<u8>,
     writer: Option<&'a mut dyn Write>,
-    serializer: Option<SerdeSerializeMap<'a>>,
 }
 
 impl<'a> NewJsonRecorder<'a> {
+    pub fn new() -> Self {
+        NewJsonRecorder {
+            buf: Vec::new(),
+            writer: None,
+        }
+    }
+
     fn set_writer(&mut self, fmt_writer: &'a mut dyn Write) {
         self.writer = Some(fmt_writer);
     }
-
-    fn set_serializer(&mut self, serializer: SerdeSerializeMap) {
-        self.serializer = Some(serializer);
-    }
 }
 
-impl<'a> crate::NewVisitor<'a> for NewJsonRecorder<'a> {
-    type Visitor =
-        SerdeMapVisitor<<&'a mut Serializer<&'a mut [u8]> as SerdeSerialer>::SerializeMap>;
+impl<'writer> crate::NewVisitor<'writer> for NewJsonRecorder<'writer> {
+    type Visitor<'recorder> = SerdeMapVisitor<
+        <&'writer mut Serializer<&'recorder mut [u8]> as SerdeSerialer>::SerializeMap,
+    >;
 
     #[inline]
-    fn make(&mut self, writer: &'a mut dyn Write, is_empty: bool) -> Self::Visitor {
+    fn make(&mut self, writer: &'writer mut dyn Write, is_empty: bool) -> Self::Visitor {
         self.set_writer(writer);
 
-        let serializer = Serializer::new(&mut self.buf).serialize_map(None).unwrap();
+        let serializer = Serializer::new(&mut self.buf[..])
+            .serialize_map(None)
+            .unwrap();
 
-        self.set_serializer(serializer);
-
-        SerdeMapVisitor::new(self.serializer.as_mut())
+        SerdeMapVisitor::new(serializer)
     }
 }
 

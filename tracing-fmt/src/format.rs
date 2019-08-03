@@ -4,7 +4,6 @@ use crate::span;
 use crate::time::{self, FormatTime, SystemTime};
 
 use std::fmt::{self, Write};
-use std::io;
 use std::marker::PhantomData;
 use tracing_core::{
     field::{self, Field},
@@ -196,16 +195,27 @@ where
     }
 }
 
-pub struct NewJsonRecorder<'a> {
+pub struct NewJsonRecorder<'a, 'b>
+where
+    'a: 'b,
+{
+    // All this fun stuff because serde uses io::Write, but we use fmt::Write.
+    // In order to work around this, we use a Vec, get the Serializer to write to the vec, and in
+    // the drop impl, write out the the fmt::Write writer
     buf: Vec<u8>,
     writer: Option<&'a mut dyn Write>,
+    _lifetime: PhantomData<&'b ()>,
 }
 
-impl<'a> NewJsonRecorder<'a> {
+impl<'a, 'b> NewJsonRecorder<'a, 'b>
+where
+    'a: 'b,
+{
     pub fn new() -> Self {
         NewJsonRecorder {
             buf: Vec::new(),
             writer: None,
+            _lifetime: PhantomData,
         }
     }
 
@@ -214,8 +224,11 @@ impl<'a> NewJsonRecorder<'a> {
     }
 }
 
-impl<'writer> crate::NewVisitor<'writer> for NewJsonRecorder<'writer> {
-    type Visitor<'recorder> = SerdeMapVisitor<
+impl<'writer, 'recorder> crate::NewVisitor<'writer> for NewJsonRecorder<'writer, 'recorder>
+where
+    'writer: 'recorder,
+{
+    type Visitor = SerdeMapVisitor<
         <&'writer mut Serializer<&'recorder mut [u8]> as SerdeSerialer>::SerializeMap,
     >;
 

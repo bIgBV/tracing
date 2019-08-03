@@ -4,14 +4,18 @@ use crate::span;
 use crate::time::{self, FormatTime, SystemTime};
 
 use std::fmt::{self, Write};
+use std::io;
 use std::marker::PhantomData;
 use tracing_core::{
     field::{self, Field},
     Event, Level,
 };
+use tracing_serde::SerdeMapVisitor;
 
 #[cfg(feature = "ansi")]
 use ansi_term::{Colour, Style};
+use serde::ser::SerializeMap;
+use serde_json::ser::Serializer;
 
 /// A type that can format a tracing `Event` for a `fmt::Write`.
 ///
@@ -189,6 +193,18 @@ where
         ctx.with_current(|(_, span)| write!(writer, " {}", span.fields()))
             .unwrap_or(Ok(()))?;
         writeln!(writer)
+    }
+}
+
+pub struct NewJsonRecorder;
+
+impl<'a> crate::NewVisitor<'a> for NewJsonRecorder {
+    type Visitor = SerdeMapVisitor<Serializer<&'a mut dyn io::Write>>;
+
+    #[inline]
+    fn make(&self, writer: &'a mut dyn Write, is_empty: bool) -> Self::Visitor {
+        let serializer = Serializer::new(writer).serialize_map(None).unwrap();
+        SerdeMapVisitor::new(serializer)
     }
 }
 

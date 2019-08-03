@@ -165,9 +165,24 @@ impl<'a> Serialize for SerializeRecord<'a> {
     }
 }
 
-struct SerdeMapVisitor<S: SerializeMap> {
+pub struct SerdeMapVisitor<S: SerializeMap> {
     serializer: S,
     state: Result<(), S::Error>,
+}
+
+impl<S> SerdeMapVisitor<S>
+where
+    S: SerializeMap,
+{
+    pub fn new(serializer: S) -> SerdeMapVisitor<S>
+    where
+        S: SerializeMap,
+    {
+        SerdeMapVisitor {
+            serializer,
+            state: Ok(()),
+        }
+    }
 }
 
 impl<S> Visit for SerdeMapVisitor<S>
